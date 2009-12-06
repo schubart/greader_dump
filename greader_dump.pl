@@ -20,13 +20,6 @@ use WebService::Google::Reader;
 
 $XML::Atom::ForceUnicode = 1;
 
-sub WebService::Google::Reader::ListElement::folder {
-    my ($self) = @_;
-    my $category = $self->categories()->[0];
-
-    return $category ? $category->label : "";
-}
-
 sub WebService::Google::Reader::ListElement::filename {
     my ($self) = @_;
     return Digest::MD5::md5_hex($self->id) . '.html';
@@ -44,11 +37,22 @@ my $reader = WebService::Google::Reader->new(username => $username,
 					     secure   => 1);
 
 my $tt = Template->new();
+my %labels;
 my @feeds = ($reader->feeds);
 @feeds = @feeds[0 .. $maxfeeds - 1] if defined $maxfeeds;
-# Relies on sort() being stable.
-@feeds = sort { ($a->folder || "zzzz") cmp ($b->folder || "zzzz") } @feeds;
 foreach my $feed (@feeds) {
+    if (@{$feed->categories}) {
+        foreach my $category (@{$feed->categories}) {
+            my $label = $category->label;
+            next if $label =~ /^zzz_/;
+
+            push @{$labels{$label}}, $feed;
+        }
+    }
+    else {
+        push @{$labels{'bbb_unclassified'}}, $feed;
+    }
+
     my $id = $feed->id;
     $id =~ s/\?/%3F/g;
     my $atom = $reader->feed($id);
@@ -59,7 +63,7 @@ foreach my $feed (@feeds) {
     }
 
     my @entries = $atom->entries;
-    $feed->{first_title} = @entries ? $entries[0]->title : 'No items';
+    $feed->{first_title} = @entries ? $entries[0]->title : '(No items)';
 
     seek ATOM, 0, 0;
     $tt->process(\*ATOM,
@@ -69,7 +73,7 @@ foreach my $feed (@feeds) {
 }
 
 $tt->process(\*INDEX,
-	     { feeds => \@feeds },
+	     { labels => \%labels, },
 	     $outdir . '/' . 'index.html',
 	     { binmode => 'utf8'} );
 
@@ -85,14 +89,24 @@ __INDEX__
     <p>[% date.format %]</p>
 
     <ul>
-      [% FOREACH feed IN feeds %]
+      [% FOREACH label IN labels.keys.sort %]
       <li>
-	[% feed.folder %]
+	<a href="#[% label %]">[% label %]</a>
+      </li>
+      [% END %]
+    </ul>
+
+    [% FOREACH label IN labels.keys.sort %]
+    <p id="[% label %]">[% label %]</p>
+    <ul>
+      [% FOREACH feed IN labels.$label %]
+      <li>
 	<a href="[% feed.filename %]">[% feed.title %]</a>
 	[% feed.first_title %]
       </li>
       [% END %]
     </ul>
+    [% END %]
   </body>
 </html>
 
