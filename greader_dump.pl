@@ -4,7 +4,6 @@
 # timestamp of most recent entry in atom view
 # inline fixing of $id
 # inline getting first entry
-# what if no first entry?
 # usage string
 # inline binmode
 # nicer anchors
@@ -59,9 +58,8 @@ foreach my $feed (@feeds) {
 	next;
     }
 
-    # TODO: what if no first entry?
     my @entries = $atom->entries;
-    $feed->{first_title} = $entries[0]->title;
+    $feed->{first_title} = @entries ? $entries[0]->title : 'No items';
 
     seek ATOM, 0, 0;
     $tt->process(\*ATOM,
